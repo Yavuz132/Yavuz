@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  UNCERTAIN
+}
+
+enum ConfidenceLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  SPEND
+  ADMIN_ADD
+}
+
+enum UnlockMethod {
+  CREDIT
+  SUBSCRIPTION
+  ADMIN
+}
+
+enum PaymentType {
+  CREDIT
+  SUBSCRIPTION
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum NotificationTargetType {
+  ALL
+  USER
+  SUBSCRIBERS
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          Role     @default(USER)
+  creditBalance Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscription     Subscription?
+  creditTransactions CreditTransaction[]
+  unlockedReports  UnlockedReport[]
+  payments         PaymentMock[]
+  auditLogs        AuditLog[]
+}
+
+model Sport {
+  id      Int    @id @default(autoincrement())
+  name    String @unique
+  slug    String @unique
+
+  leagues League[]
+  teams   Team[]
+  matches Match[]
+}
+
+model League {
+  id      Int    @id @default(autoincrement())
+  sportId Int
+  name    String
+  country String
+  logoUrl String?
+
+  sport   Sport   @relation(fields: [sportId], references: [id])
+  teams   Team[]
+  matches Match[]
+}
+
+model Team {
+  id       Int    @id @default(autoincrement())
+  sportId  Int
+  leagueId Int
+  name     String
+  logoUrl  String?
+
+  sport        Sport   @relation(fields: [sportId], references: [id])
+  league       League  @relation(fields: [leagueId], references: [id])
+  homeMatches  Match[] @relation("HomeTeam")
+  awayMatches  Match[] @relation("AwayTeam")
+}
+
+model Match {
+  id              Int         @id @default(autoincrement())
+  sportId         Int
+  leagueId        Int
+  homeTeamId      Int
+  awayTeamId      Int
+  matchDate       DateTime
+  status          MatchStatus @default(SCHEDULED)
+  homeScore       Int?
+  awayScore       Int?
+  popularityScore Int         @default(0)
+  dataScore       Int         @default(0)
+  riskLevel       RiskLevel   @default(UNCERTAIN)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  sport    Sport  @relation(fields: [sportId], references: [id])
+  league   League @relation(fields: [leagueId], references: [id])
+  homeTeam Team   @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  stats         MatchStat?
+  premiumReport PremiumReport?
+}
+
+model MatchStat {
+  id                   Int    @id @default(autoincrement())
+  matchId              Int    @unique
+  homeLastFive         String
+  awayLastFive         String
+  homeAverageScore     Float  @default(0)
+  awayAverageScore     Float  @default(0)
+  homeDefenseAverage   Float  @default(0)
+  awayDefenseAverage   Float  @default(0)
+  homePerformanceNote  String @default("")
+  awayPerformanceNote  String @default("")
+
+  match Match @relation(fields: [matchId], references: [id])
+}
+
+model PremiumReport {
+  id               Int             @id @default(autoincrement())
+  matchId          Int             @unique
+  title            String
+  summary          String
+  dataScore        Int
+  riskLevel        RiskLevel
+  confidenceLevel  ConfidenceLevel
+  positiveFactors  String[]
+  negativeFactors  String[]
+  scenarioText     String
+  disclaimerText   String          @default("This analysis is provided for statistical informational purposes only. It does not guarantee any result, profit, or betting outcome.")
+  isPublished      Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  match           Match            @relation(fields: [matchId], references: [id])
+  unlockedReports UnlockedReport[]
+}
+
+model UnlockedReport {
+  id         Int          @id @default(autoincrement())
+  userId     Int
+  reportId   Int
+  unlockedBy UnlockMethod
+  createdAt  DateTime     @default(now())
+
+  user   User          @relation(fields: [userId], references: [id])
+  report PremiumReport @relation(fields: [reportId], references: [id])
+
+  @@unique([userId, reportId])
+}
+
+model Subscription {
+  id               Int                @id @default(autoincrement())
+  userId           Int                @unique
+  packageName      String
+  status           SubscriptionStatus @default(ACTIVE)
+  startDate        DateTime           @default(now())
+  endDate          DateTime
+  reportLimit      Int                @default(-1)
+  usedReportCount  Int                @default(0)
+  createdAt        DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model CreditTransaction {
+  id          Int                   @id @default(autoincrement())
+  userId      Int
+  type        CreditTransactionType
+  amount      Int
+  description String
+  createdAt   DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model PaymentMock {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  type      PaymentType
+  amount    Float
+  status    PaymentStatus @default(COMPLETED)
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id         Int                    @id @default(autoincrement())
+  title      String
+  body       String
+  targetType NotificationTargetType @default(ALL)
+  createdAt  DateTime               @default(now())
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int
+  action     String
+  entityType String
+  entityId   Int
+  createdAt  DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+}
