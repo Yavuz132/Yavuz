@@ -1,0 +1,19 @@
+# Kopyala: cp brand/brand.example.yaml brand/brand.yaml  (veya: python -m studio init)
+name: "Marka Adı"
+sector: "Kafe / Güzellik / Emlak / E-ticaret ..."
+city: "İstanbul"
+language: "tr"
+target_audience: "25-40 yaş, şehirli, kaliteye önem veren"
+tone: "samimi, premium, hafif esprili"
+usp:
+  - "Öne çıkan özellik 1"
+  - "Öne çıkan özellik 2"
+platforms: ["instagram", "tiktok"]
+visual_style: "sıcak tonlar, doğal ışık, minimal kompozisyon"
+colors: ["#1F1F1F", "#C8A97E"]
+do_not: ["abartılı indirim dili", "klişe hashtag spamı"]
+goals: ["takipçi büyütmek", "DM/randevu almak"]
+posting_frequency: {reels: 3, posts: 3, stories: 7}   # haftalık
+competitors:
+  - {name: "Rakip 1", handle: "@rakip1"}
+  - {name: "Rakip 2", handle: "@rakip2"}
