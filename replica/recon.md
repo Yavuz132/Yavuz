@@ -144,6 +144,5 @@ See `features.csv`. Must: 11, should: 7, could: 3, skip: 4.
 
 Screens 18 (17 in scope), flows 7, entities 8. Hard parts: real-time 3D match
 gameplay and player AI (teammates, opponents, goalkeepers), touch controls
-that feel right, mobile performance. Size: L if 3D (Unity or Godot). M if
-2D top-down in the browser or with a 2D engine. Recommend deciding this at
-architect time.
+that feel right, mobile performance. Size: L (3D, Unity, Android). Decided
+with the user: Unity 3D, personal use, offline.

@@ -1,162 +1,149 @@
-# Architecture: personal 2D football game (a rebuild of Dream League Soccer's core loop)
+# Architecture: personal 3D football game for Android (a rebuild of Dream League Soccer's core loop)
 
-For personal use, runs in the browser (desktop and phone), fully offline,
-no accounts, no server. Fictional players and clubs. All art and audio are
-original or open-licensed.
+For personal use. Android APK built by the user in Unity. Offline, single
+player, no accounts, no server. Fictional players and clubs. All art, audio
+and animations are original, generated or open-licensed. Nothing is taken from
+the original game's files.
+
+Supersedes the earlier browser/2D plan (changed on the user's request).
 
 ## Stack
 
 | layer | choice | why |
 | --- | --- | --- |
-| language | TypeScript (strict) | types catch most match-logic bugs |
-| build | Vite | zero-config dev server, static build |
-| rendering | HTML5 Canvas 2D, own thin renderer | top-down 2D needs no engine; keeps bundle tiny |
-| game loop | fixed 60 Hz simulation step, rendered with requestAnimationFrame | deterministic match logic, testable without a screen |
-| UI (menus) | plain DOM + CSS (tokens from replica-design) | menus are forms and lists, not canvas |
-| input | Pointer Events: virtual joystick + buttons on touch, keyboard on desktop | one code path for both |
-| persistence | IndexedDB (via `idb-keyval`), JSON save with a version number | offline, survives reloads; localStorage is too small |
-| audio | Web Audio API, original or CC0 sounds | no licensed music |
-| tests | Vitest for logic, Playwright for UI flows | see replica-test |
-| hosting | none needed. `vite build` gives static files. Optional: GitHub Pages | personal use |
-| backend, auth, payments, email, jobs | none | no accounts, no money, no network features in v1 |
+| engine | Unity 2022.3 LTS | most used mobile engine, long-term support, builds Android APK |
+| language | C# | Unity's language |
+| render pipeline | URP (Universal Render Pipeline) | good mobile performance |
+| 3D match | Unity 3D scene: pitch, ball (Rigidbody sphere), 22 players | the real game is 3D |
+| character models | simple original low-poly humanoids first, replaceable later | placeholders now, art later |
+| animation | Animator with a small set: idle, run, kick, tackle, GK dive, celebrate | original or open-licensed clips only |
+| input | Unity Input System + on-screen stick and on-screen buttons | touch controls like the original |
+| menus | UI Toolkit or uGUI with canvas scaler (portrait and landscape safe) | one UI system for all screens |
+| persistence | JSON save in `Application.persistentDataPath`, versioned | offline, simple |
+| audio | Unity AudioSource, original or CC0 sounds | no licensed music or commentary |
+| tests | pure C# core library tested with `dotnet test` here, Unity Test Framework for scene tests on the user's machine | I can verify logic without the Editor |
+| build | Unity Editor > Android (IL2CPP, ARM64), done by the user | |
+| backend, auth, payments | none | offline personal game |
 
-No microservices, no database server. The clone does not need the original's
-architecture, only its features. Online mode (S15) is skipped, so there is no
-backend to plan.
+## Repository layout
 
-## Schema
-
-No SQL. Data is one `SaveGame` JSON object in IndexedDB. Access rules: none
-(single local user). Static reference data (players, clubs, divisions) is
-generated from a seed on first run, so it is fictional and reproducible.
-
-```ts
-type Position = 'GK' | 'DF' | 'MF' | 'FW';
-
-interface Player {
-  id: string;
-  name: string;            // generated, fictional
-  position: Position;
-  age: number;
-  // ratings 1..99, drive match outcomes
-  pace: number; shooting: number; passing: number;
-  defending: number; physical: number; goalkeeping: number;
-  clubId: string | null;   // null = free agent / on the market
-  price: number;           // coins
-}
-
-interface Club {
-  id: string; name: string;
-  kit: { home: Kit; away: Kit };
-  badge: BadgeSpec;        // shapes and colours drawn in code
-  isUser: boolean;
-  divisionId: number;
-}
-
-interface Kit { primary: string; secondary: string; pattern: 'plain' | 'stripes' | 'hoops' | 'sash'; }
-
-interface Lineup { formation: '4-4-2' | '4-3-3' | '3-5-2' | '4-2-3-1'; slots: (string | null)[]; } // 11 player ids
-
-interface Division { id: number; tier: number; name: string; clubIds: string[]; } // tier 1..8
-
-interface Fixture {
-  id: string; season: number; divisionId: number; round: number;
-  homeId: string; awayId: string;
-  result: { home: number; away: number } | null;
-}
-
-interface Coach { type: 'technical' | 'physical'; level: number; }       // level 0..5
-interface Facility { type: 'stadium' | 'medical' | 'commercial' | 'training'; level: number; }
-
-interface SaveGame {
-  version: number;                 // migrations by version
-  seed: number;                    // for reproducible generation
-  coins: number;
-  season: number;
-  userClubId: string;
-  manager: { hair: number; outfit: number };
-  players: Player[]; clubs: Club[]; divisions: Division[]; fixtures: Fixture[];
-  lineup: Lineup; coaches: Coach[]; facilities: Facility[];
-  settings: { sound: boolean; controls: 'joystick' | 'keyboard'; language: string };
-}
+```
+game/
+  Core/                      pure C# (no UnityEngine), compiled by dotnet AND Unity
+    Sim/        MatchSim, PlayerAI, GoalkeeperAI, Rules, QuickSim
+    Model/      Player, Club, Division, Fixture, Coach, Facility, SaveGame
+    Game/       Season, Team, Club, Economy, Generator
+    Store/      SaveStore, Migrations
+  Core.Tests/                xUnit tests for Core, run with `dotnet test`
+  UnityProject/
+    Assets/Scripts/View/     MonoBehaviours that draw the Core state (players, ball, camera)
+    Assets/Scripts/Input/    touch stick, buttons
+    Assets/Scripts/UI/       screens S01-S18
+    Assets/Scenes/           Boot, Menu, Match
+    Assets/Art, Audio/       original assets only
 ```
 
-Hard constraints (enforced in the data layer, checked by tests):
+Why split: match rules, AI, season and economy are plain C#, so I can build
+and test them here without Unity. Unity code only reads Core state and draws
+it. That keeps most of the work verifiable.
+
+## Data model (replaces SQL)
+
+One `SaveGame` JSON object. No database. Access rules: none (single local user).
+Players, clubs and divisions are generated from a seed on first run, so they are
+fictional and reproducible.
+
+```csharp
+enum Position { GK, DF, MF, FW }
+
+class Player   { string Id, Name; Position Pos; int Age;
+                 int Pace, Shooting, Passing, Defending, Physical, Goalkeeping; // 1..99
+                 string ClubId; int Price; }
+class Kit      { string Primary, Secondary; string Pattern; }  // plain, stripes, hoops, sash
+class Club     { string Id, Name; Kit Home, Away; BadgeSpec Badge; bool IsUser; int DivisionId; }
+class Lineup   { string Formation; string[] Slots; }           // 11 player ids
+class Division { int Id, Tier; string Name; string[] ClubIds; } // tier 1..8
+class Fixture  { string Id; int Season, DivisionId, Round; string HomeId, AwayId; Result Score; }
+class Coach    { string Type; int Level; }                     // technical | physical, 0..5
+class Facility { string Type; int Level; }                     // stadium | medical | commercial | training
+class SaveGame { int Version; int Seed; int Coins; int Season; string UserClubId;
+                 Manager Manager; List<Player> Players; List<Club> Clubs;
+                 List<Division> Divisions; List<Fixture> Fixtures; Lineup Lineup;
+                 List<Coach> Coaches; List<Facility> Facilities; Settings Settings; }
+```
+
+Constraints enforced in Core and covered by tests:
 
 - A lineup has exactly 11 distinct players, exactly 1 GK, all from the user's club.
-- Coins never go negative. Every spend goes through one `spend(amount)` function.
-- A fixture is played once. Re-playing a played fixture is rejected.
-- Squad size has a min and max. Release is blocked below the minimum.
-- Save writes are atomic: write the new object, then swap the key.
+- Coins never go negative; every spend goes through `Economy.Spend`.
+- A fixture is played once.
+- Squad size has a minimum and a maximum.
+- Save writes are atomic (write temp file, then replace) and keep one backup.
 
 ## Modules (replaces the API section)
 
-No HTTP routes. The boundary is a set of modules, one per flow.
-
-| module | does | called by | flow |
+| module | does | used by | flow |
 | --- | --- | --- | --- |
-| `sim/match.ts` | runs one match step by step: ball, players, rules, score, clock | S06 | F01, F02, F07 |
-| `sim/ai.ts` | decides for each non-controlled player and the GK each tick | match.ts | F02 |
-| `sim/quick.ts` | resolves a match from ratings without rendering (for AI vs AI fixtures) | season.ts | F02 |
-| `input/controls.ts` | joystick, buttons, keyboard to a `PlayerInput` struct | S06 | F01, F02 |
-| `render/pitch.ts` | draws pitch, players, ball, HUD | S06 | F01, F02 |
-| `game/season.ts` | fixtures, table, promotion, rewards | S04, S07 | F02, F06 |
-| `game/team.ts` | lineup, formation, sign / release, ratings | S05, S08-S10 | F03 |
-| `game/club.ts` | coaches, facilities, kit, manager, upgrade costs | S11-S14 | F04, F05 |
-| `game/economy.ts` | `earn()`, `spend()`, price and reward tables | all | F02-F04 |
-| `game/generate.ts` | seeded generation of clubs, players, divisions | first run | F01 |
-| `store/save.ts` | load, save, migrate, reset | everything | all |
-| `ui/*` | DOM screens S01-S18 | router | all |
+| `Core/Sim/MatchSim` | fixed-step match simulation: positions, ball, rules, clock, score | Match scene | F01, F02, F07 |
+| `Core/Sim/PlayerAI`, `GoalkeeperAI` | decisions for every non-controlled player each tick | MatchSim | F02 |
+| `Core/Sim/QuickSim` | resolves AI vs AI fixtures from ratings, no rendering | Season | F02 |
+| `Core/Game/Season` | fixtures, table, promotion, rewards | S04, S07 | F02, F06 |
+| `Core/Game/Team` | lineup, formation, sign, release | S05, S08-S10 | F03 |
+| `Core/Game/Club` | coaches, facilities, kit, manager, upgrade costs | S11-S14 | F04, F05 |
+| `Core/Game/Economy` | earn, spend, price and reward tables (one tuning file) | all | F02-F04 |
+| `Core/Game/Generator` | seeded clubs, players, divisions | first run | F01 |
+| `Core/Store/SaveStore` | load, save, migrate, reset | all | all |
+| `View/*` | draws MatchSim state with 3D models, camera, effects | Match scene | F01, F02 |
+| `Input/*` | on-screen stick and buttons to a `PlayerInput` struct | Match scene | F01, F02 |
+| `UI/*` | screens S01-S18 | router | all |
 
-Jobs and webhooks: none. Season rollover runs when the last fixture is played.
+No webhooks, no jobs. Season rollover runs when the last fixture is played.
 
 ## The parts that bite
 
-- **Match AI is the hardest part.** Start with simple steering: each player has
-  a home position from the formation, shifts with the ball, the nearest player
-  chases, the ball carrier chooses pass / shoot / dribble by simple rules.
-  Tune with parameters, not special cases.
-- **Determinism.** Fixed time step plus a seeded random number generator
-  (`mulberry32`). Then a match is replayable from a seed, which makes bugs
-  reproducible and tests possible.
-- **Touch controls feel.** Joystick dead zone, button size 48px or more, no
-  accidental page scroll or zoom (`touch-action: none`), multi-touch for
-  joystick plus buttons together. Needs a real phone to judge.
-- **Performance on phones.** Draw at device pixel ratio but cap it, reuse
-  objects, no allocations in the game loop, pause when the tab is hidden.
-- **Backgrounding mid-match.** Auto-pause on `visibilitychange`. Never resume
-  on its own.
-- **Save corruption.** Versioned schema, migrate on load, keep one backup copy
-  of the previous save, offer reset.
-- **Balance.** Coin rewards, prices and upgrade costs live in one tuning
-  table, not in the code, so they can be changed without touching logic.
-- **Audio autoplay.** Browsers block sound until the first tap. Start audio on
-  the first user gesture.
-- **Clean room.** Names, badges, kits, sounds are all generated or original.
-  `replica-brand` is skipped (personal use), but keep real names out anyway.
+- **Match AI is the hardest part.** Formation home positions, shift with the ball,
+  nearest player presses, ball carrier chooses pass, shoot or dribble by
+  simple scored rules, goalkeeper positioning and dives. Tune with parameters.
+- **Sim in Core, view in Unity.** `MatchSim` runs at a fixed step on its own
+  coordinates. Unity interpolates models between steps. Never let physics
+  decide rules. The ball can be a custom integrator in Core so results are
+  deterministic and testable.
+- **Determinism.** Seeded random number generator. A match is replayable from a
+  seed, which makes bugs reproducible.
+- **Camera and controls feel.** Broadcast-style side camera that follows the
+  ball, stick dead zone, buttons 48dp or more, multi-touch for stick plus
+  buttons. This needs a real phone to judge. Expect several tuning rounds.
+- **Mobile performance.** Low-poly models, GPU instancing, no per-frame
+  allocations, target 60 fps on a mid-range phone, cap quality settings.
+- **Animation and models are the biggest art cost.** Placeholders first so the
+  game is playable, art later. Only original or open-licensed assets.
+- **Backgrounding mid-match.** Auto-pause on app pause. Never resume on its own.
+- **Save corruption.** Versioned schema, migrate on load, one backup copy.
+- **Balance.** Coin rewards, prices, upgrade costs in one tuning table.
+- **Clean room.** Fictional names, own badges and kits, own audio.
+  Replica's brand step is skipped for personal use, but real names stay out.
+- **What I cannot verify here.** Anything that needs the Unity Editor: scenes,
+  animation, touch feel, APK build. I verify Core with tests, and give the user a
+  checklist for the Unity side.
 
 ## Build order
 
-1. **Vertical slice** (S06, S07, S03): one match between two generated teams.
-   Pitch, ball, 11 vs 11 with simple AI, joystick plus pass / shoot, score,
-   clock, final whole-match result screen, save coins. Proves the loop and the
-   controls. Touches: `sim`, `render`, `input`, `store`. No season yet.
-2. **Must-haves, by area:**
-   - match: GK AI, rules (kickoff, half time, throw-ins, goal kicks), result
-     screen and reward (S06, S07).
-   - season: divisions, fixtures, table, promotion (S04, S07).
-   - team: lineup, formation, ratings affect outcome (S05, S08, S09).
-   - economy: earn and spend (S03).
-3. **Should-haves:** transfer market (S10), coaches (S11), facilities (S12),
-   kit and badge editor (S13), manager look (S14), tutorial (S02), training
-   mode (S17), settings (S18).
-4. **Could-haves:** commentary text, events (S16), custom kit image import.
-5. **Fixes from replica-entrepreneur:** skipped by choice (personal use).
-   Optional later: read what players dislike in the original (grind, ads,
-   pay-to-win) and leave those out.
+1. **Core vertical slice** (tested here): Model, Generator, MatchSim with simple
+   AI, a text log or headless match that produces sensible scores, seeded and
+   repeatable. Proves the logic before any 3D.
+2. **Unity vertical slice** (S06, S07, S03): Boot, Menu and Match scenes, pitch,
+   ball, 22 capsule players, stick plus pass and shoot, clock, score, result
+   screen. The user opens it in Unity, plays in the Editor, then builds the APK.
+3. **Must-haves, by area:** GK AI and rules (S06), divisions and table (S04),
+   lineup and formation (S05, S08, S09), coins (S03).
+4. **Should-haves:** transfer market (S10), coaches (S11), facilities (S12),
+   kit editor (S13), manager look (S14), tutorial (S02), training (S17),
+   settings (S18).
+5. **Could-haves:** commentary text, events (S16), custom kit image import,
+   better models and animation.
 
-## Decisions to confirm
+## Decisions made
 
-- 2D top-down in the browser (assumed). Change to Godot or Unity if you want 3D.
-  That would roughly triple the match work and change this document's stack.
-- Offline single-player only. No online mode.
+- Unity 3D, Android, offline single player. No online mode.
+- User builds the APK. I deliver the Unity project files, Core code and tests.
+- Fictional content only.
