@@ -1,0 +1,26 @@
+feature,area,priority,original,clone,notes
+Playable match with virtual joystick and action buttons,match,must,yes,no,core loop
+Pass / shoot / sprint controls,match,must,yes,no,
+Opponent and teammate AI,match,must,yes,no,hardest part
+Goalkeeper AI,match,must,yes,no,
+Match rules: goals kickoff half time full time,match,must,yes,no,
+Match result screen with coin reward,match,must,yes,no,
+Division ladder with fixtures and table,season,must,yes,no,8 divisions
+Promotion between divisions,season,must,yes,no,relegation rules unknown
+Squad screen with formation and lineup,team,must,yes,no,
+Player ratings that affect match outcome,team,must,yes,no,fictional players
+Coins economy (earn from matches spend on upgrades),economy,must,yes,no,
+Sign and release players (transfer market),team,should,yes,no,
+Coaches that develop player abilities,team,should,yes,no,
+Stadium and facility upgrades,club,should,yes,no,stadium medical commercial training
+Customise kit and badge,club,should,yes,no,
+Customise manager look,club,should,yes,no,
+Tutorial / first match,onboarding,should,yes,no,
+Training mode,match,should,yes,no,
+Match commentary,audio,could,yes,no,original audio
+Timed events with prizes,events,could,yes,no,
+Import custom kit image,club,could,yes,no,
+Real licensed players,content,could,yes,skip,licensed (FIFPro). Use fictional players
+Real clubs and kits,content,could,yes,skip,trademarks
+Dream League Online and global leaderboards,online,could,yes,skip,needs a server and a player network. Revisit after v1
+Licensed music and commentary audio,audio,could,yes,skip,owned content
